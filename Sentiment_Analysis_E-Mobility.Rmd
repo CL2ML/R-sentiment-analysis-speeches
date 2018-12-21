@@ -1,0 +1,177 @@
+---
+title: "Sentiment_Analysis_E-Mobility"
+author: "CM"
+date: "14 Dezember 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Exploring sentiment analysis with tidytext
+
+Which dependencies we need:
+
+* [tidyverse](https://cran.r-project.org/web/packages/tidyverse/): Out of convenience, we are going to use use tidyverse which includes dplyr, stringr ggplot2.
+* [tidytext](https://cran.r-project.org/web/packages/tidytext/index.html: 
+
+## Examplary text data
+
+In order to exlore the functionalities, I used political speech data. I chose the topic of E-mobility and a speech by the German chancellor. 
+
+Data source:
+
+[Speech by the German chancellor, 2018-09-27](https://www.bundesregierung.de/breg-de/aktuelles/rede-von-bundeskanzlerin-merkel-beim-symposium-10-jahre-elektromobilitaet-zukunft-wird-gegenwart-der-mennekes-gmbh-co-kg-am-27-september-2018-1533260)
+
+```{r}
+# Loading tidyverse
+library(tidyverse)
+```
+
+I copied the speech text by hand and read it into R with the readClipboard() function. Make sure to save it directly as RDS to be safe.
+
+```{r}
+# Read text data
+speech_merkel_2018_09_27 <- readClipboard() 
+
+saveRDS(speech_merkel_2018_09_27, "speech_merkel_2018_09_27.RDS")
+```
+
+```{r}
+# Quick exploration
+head(str_count(speech_merkel_2018_09_27))
+```
+
+```{r}
+# Remove strange strings
+speech_merkel_2018_09_27 <- str_trim(speech_merkel_2018_09_27)
+
+# Split words
+speech_merkel_2018_09_27 <- unlist(strsplit(speech_merkel_2018_09_27, " ")) # Extract all from the created list
+
+# Remove strange strings such as "," or "-"
+speech_merkel_2018_09_27 <- str_remove(speech_merkel_2018_09_27, " ") 
+
+```
+
+## Tidy text library
+
+Some guiding:
+
+https://juliasilge.com/blog/tidytext-0-1-6/
+
+https://cran.r-project.org/web/packages/tidytext/tidytext.pdf
+
+https://cran.r-project.org/web/packages/tidytext/vignettes/tidytext.html
+
+https://www.tidytextmining.com/dtm.html
+
+https://www.datacamp.com/courses/sentiment-analysis-in-r-the-tidy-way
+
+Infos about implementation for German texts:
+https://www.inwt-statistics.de/blog-artikel-lesen/text-mining-part-3-sentiment-analyse.html
+
+
+
+```{r}
+library(tidytext)
+speech_merkel_2018_09_27_td <- tidy(speech_merkel_2018_09_27)
+colnames(speech_merkel_2018_09_27_td) <- "word"
+
+# Second: remove strange strings
+speech_merkel_2018_09_27_td %>% filter(word != "", word != ".")
+
+# Text after stopwords
+tidy_speech_merkel_2018_09_27_2018_09_27 <- speech_merkel_2018_09_27_td %>%
+    count(word, sort = TRUE) %>%
+    anti_join(get_stopwords(language = "de")) 
+
+saveRDS(tidy_speech_merkel_2018_09_27_2018_09_27, "tidy_speech_merkel_2018_09_27_2018_09_27.RDS")
+
+# Plot
+tidy_speech_merkel_2018_09_27 %>%
+    top_n(30) %>%
+    arrange(desc(n)) %>% 
+    ggplot(aes(word, n)) +
+    geom_col(alpha = 0.8, show.legend = FALSE, fill = "blue") +
+    coord_flip()+
+    scale_y_continuous(expand = c(0,0)) +
+    scale_x_discrete(labels = function(x) gsub("__.+$", "", x)) +
+    labs(x = NULL, y = "Number of uses in the speec",
+         title = "Word use in Merkel's speech",
+         subtitle = "The most common words after stopword removal")
+
+```
+
+## Sentiment analysis
+
+### Preparing the sentiment reference data
+```{r}
+# Source: https://www.inwt-statistics.de/blog-artikel-lesen/text-mining-part-3-sentiment-analyse.html
+
+FILEPATH <- "C:/Users/CM/Desktop/PROJEKTE/2-Data Science/Projekte/1-Industry Sector/Transportation/Road/SentiWS_v2.0/"
+
+# W?rter laden und vorbereiten
+sent <- c(
+  # positive W?rter
+  readLines(paste0(FILEPATH, "SentiWS_v2.0_Positive.txt"),
+            encoding = "UTF-8"),
+  # negative W?rter
+  readLines(paste0(FILEPATH, "SentiWS_v2.0_Negative.txt"),
+            encoding = "UTF-8")
+) %>% lapply(function(x) {
+  # Extrahieren der einzelnen Spalten
+  res <- strsplit(x, "\t", fixed = TRUE)[[1]]
+  return(data.frame(word = res[1], value = res[2],
+                    stringsAsFactors = FALSE))
+}) %>%
+  bind_rows %>%
+  # W?rter bereinigen
+  mutate(word = gsub("\\|.*", "", word) %>% tolower,
+         value = as.numeric(value)) %>% 
+  # manche W?rter kommen doppelt vor, hier nehmen wir den mittleren Wert
+  group_by(word) %>% summarise(value = mean(value)) %>% ungroup
+
+saveRDS(sent, "sent.RDS")
+
+```
+
+```{r}
+#  Sentiments werden mittels eines Joins an die Tabelle mit den Tokens der Rede angef?gt
+sentTxt <- left_join(tidy_speech_merkel_2018_09_27, sent, by = "word") %>% 
+  mutate(value = as.numeric(value)) %>% 
+  filter(!is.na(value))
+
+saveRDS(sentTxt, "senTxt.RDs")
+```
+
+
+### Average sentiment value of the speech
+
+```{r}
+# Durchschnittswert der Rede ?ber alle Sentiments 
+sentTxt %>% 
+  #group_by() %>% 
+  summarize(meanSent = mean(value), maxSent = max(value), minSent = min(value))
+```
+
+### Frequency of sentiments
+
+```{r}
+sentTxt %>% mutate(sent = ifelse(value >= 0, "positive", "negative")) %>% 
+  ungroup %>% 
+  group_by(sent) %>%
+  top_n(25) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sent)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sent, scales = "free_y") +
+  labs(x = NULL, y = "H?ufigkeit") +
+  coord_flip()
+```
+
+# References
+
+R. Remus, U. Quasthoff & G. Heyer: SentiWS - a Publicly Available German-language Resource for Sentiment Analysis. In: Proceedings of the 7th International Language Ressources and Evaluation (LREC'10), pp. 1168-1171, 2010
