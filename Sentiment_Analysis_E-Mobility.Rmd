@@ -1,7 +1,5 @@
 ---
 title: "Sentiment_Analysis_E-Mobility"
-author: "CM"
-date: "14 Dezember 2018"
 output: html_document
 ---
 
@@ -16,7 +14,11 @@ Which dependencies we need:
 * [tidyverse](https://cran.r-project.org/web/packages/tidyverse/): Out of convenience, we are going to use use tidyverse which includes dplyr, stringr ggplot2.
 * [tidytext](https://cran.r-project.org/web/packages/tidytext/index.html: 
 
+<<<<<<< HEAD
 ## Exemplary text data
+=======
+## Examplary text data
+>>>>>>> 6dac5c00fc44597c46c079c432f14ba6d0285a57
 
 In order to exlore the functionalities, I used political speech data. I chose the topic of E-mobility and a speech by the German chancellor. 
 
